@@ -1,0 +1,93 @@
+---
+import Layout from '../layouts/Layout.astro';
+import '../styles/applications.css';
+
+const mockApplications = [
+  {
+    id: '1',
+    name: 'E-Commerce Platform',
+    users: '850/10,000',
+    lastActive: '2023-06-15',
+    status: 'active',
+    apiKey: 'sk_live_...4ji2'
+  },
+  {
+    id: '2',
+    name: 'Mobile Banking App',
+    users: '12,450/100,000',
+    lastActive: '2023-06-18',
+    status: 'active',
+    apiKey: 'sk_live_...8xv9'
+  },
+  {
+    id: '3',
+    name: 'Internal HR System',
+    users: '45/500',
+    lastActive: '2023-06-01',
+    status: 'development',
+    apiKey: 'sk_test_...3kf7'
+  }
+];
+---
+
+<Layout title="My Applications | PurelyAuth">
+  <main class="applications-container">
+    <div class="applications-header">
+      <h1>My Applications</h1>
+      <div class="applications-header-buttons">
+        <a href="/new-application" class="btn-outline">New Application</a>
+        <a href="/api-docs" class="btn-outline">API Docs</a>
+        <a href="/subscription" class="btn-outline">Billing</a>
+      </div>
+    </div>
+
+    <div class="applications-grid">
+      {mockApplications.map(app => (
+        <div class="application-card">
+          <div class="application-card-header">
+            <h3>{app.name}</h3>
+          </div>
+          
+          <div class="application-stats">
+            <div class="stat">
+              <span class="stat-label">Users</span>
+              <span class="stat-value">{app.users}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">API Key</span>
+              <span class="stat-value">••••••••••••••••</span>
+            </div>
+          </div>
+
+          <div class="application-actions">
+            <a href={`/applications/manage/${app.id}`} class="btn-outline">Settings</a>
+            <button class="btn-outline" onclick={`copyKey('${app.id}', '${app.apiKey}')`}>Copy API Key</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </main>
+
+  <script is:inline>
+    async function copyKey(appId, key) {
+      try {
+        await navigator.clipboard.writeText(key);
+        
+        const button = document.querySelector(`button[onclick="copyKey('${appId}', '${key}')"]`);
+        const originalText = button.textContent;
+        
+        button.textContent = 'Copied!';
+        button.classList.add('btn-filled');
+        
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.classList.remove('btn-filled');
+        }, 1500);
+        
+      } catch (err) {
+        console.error('Failed to copy API key: ', err);
+        alert('Failed to copy API key. Please try again or copy manually.');
+      }
+    }
+  </script>
+</Layout>

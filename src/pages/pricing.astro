@@ -4,12 +4,13 @@ import '../styles/pricing.css';
 
 const pricingPlans = [
   {
-    name: "Developer",
+    name: "Free",
     price: "$0",
     period: "/mo",
     description: "Perfect for prototypes and early development",
     features: [
-      "Ideal for testing (500 user limit)",
+      "1 application/userbase",
+      "500 users per application",
       "All core authentication features",
       "Great for proof-of-concepts"
     ],
@@ -17,12 +18,15 @@ const pricingPlans = [
     popular: false
   },
   {
-    name: "Startup",
-    price: "$10",
+    name: "Pro",
+    price: "$9",
     period: "/mo",
-    description: "For launched applications with real users",
+    description: "For those with launched applications with real users",
     features: [
-      "Handles up to 10,000 users",
+      "3 applications/userbases",
+      "10,000 users per application",
+      "Only $5 per extra 1K users",
+      "$10/month per additional app",
       "Everything you need for production",
       "Email support included"
     ],
@@ -30,13 +34,15 @@ const pricingPlans = [
     popular: true
   },
   {
-    name: "Scale",
-    price: "$50",
+    name: "Business",
+    price: "$99",
     period: "/mo",
-    description: "For rapidly growing user bases",
+    description: "For bussinesses with rapidly growing user bases",
     features: [
-      "Supports up to 100,000 users",
+      "10 applications/userbases",
+      "100,000 users per application",
       "Only $10 per extra 10K users",
+      "$5/month per additional app",
       "Priority feature requests"
     ],
     cta: "Scale Effortlessly →",
