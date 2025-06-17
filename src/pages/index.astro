@@ -1,0 +1,87 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Banner from '../components/LandingBanner.astro';
+import '../styles/index.css';
+
+const features = [
+  {
+    title: "Simple API Integration",
+    description: "Add secure authentication to your app with just a few API calls, no complex setup required",
+    icon: "⚡"
+  },
+  {
+    title: "Complete Auth Flow",
+    description: "Handle signups, logins, email verification, and password resets with our managed service",
+    icon: "🔑"
+  },
+  {
+    title: "User Management",
+    description: "Track and manage your userbase with our simple dashboard and powerful API",
+    icon: "👥"
+  },
+  {
+    title: "Secure by Default",
+    description: "Built with industry-standard security practices including encryption and rate limiting",
+    icon: "🛡️"
+  },
+  {
+    title: "Developer Friendly",
+    description: "Clear documentation, SDKs for popular languages, and responsive support",
+    icon: "👨‍💻"
+  },
+];
+---
+
+<Layout title="PurelyAuth - Simple API Authentication">
+  <Banner />
+  <section class="hero-banner">
+    <div class="hero-content">
+      <h1>API-Based Authentication Service</h1>
+      <p class="subtitle">Add secure user authentication to your apps with our simple API. Manage signups, logins, and user tracking without building your own auth system.</p>
+      <div class="cta-buttons">
+        <a href="/signup" class="btn-primary btn-large">Get Started Free</a>
+        <a href="/docs" class="btn-outline btn-large">View API Docs</a>
+      </div>
+    </div>
+    <div class="hero-image">
+      <img src="/auth-screenshot.png" alt="PurelyAuth dashboard interface example" />
+    </div>
+  </section>
+
+  <section id="features" class="features-section">
+    <h2>Simple, Powerful Authentication Features</h2>
+    <div class="features-grid">
+      {features.map((feature) => (
+        <div class="feature-card gradient-bg">
+          <div class="feature-icon">{feature.icon}</div>
+          <h3>{feature.title}</h3>
+          <p>{feature.description}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="cta-section gradient-bg">
+    <h2>Ready to Simplify Your Authentication?</h2>
+    <p>Focus on your core product while we handle user management securely.</p>
+    <br><br>
+    <a href="/signup" class="btn-primary btn-large">Try PurelyAuth Free</a>
+  </section>
+
+  <footer class="footer gradient-bg">
+    <div class="logo-container">
+      <img src="/favicon.png" alt="PurelyAuth Logo" class="logo" />
+      <span class="logo-text">PurelyAuth</span>
+    </div>
+
+    <div class="footer-links">
+      <a href="/privacy" class="btn-outline">Privacy</a>
+      <a href="/terms" class="btn-outline">Terms</a>
+      <a href="/contact" class="btn-outline">Contact</a>
+    </div>
+
+    <p class="copyright">
+      © <script>document.write(new Date().getFullYear())</script> AnsaGroup. All rights reserved.
+    </p>
+  </footer>
+</Layout>
