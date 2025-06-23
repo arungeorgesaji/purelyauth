@@ -14,6 +14,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+const product_name = import.meta.env.PRODUCT_NAME;
 const verification_secret = generateSecretKeyHash(import.meta.env.VERIFICATION_SECRET);
 const email_secret = generateSecretKeyHash(import.meta.env.EMAIL_SECRET);
 const password_secret = generateSecretKeyHash(import.meta.env.PASSWORD_SECRET);

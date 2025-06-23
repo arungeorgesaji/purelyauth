@@ -1,7 +1,6 @@
 export const prerender = false;
 import { Pool } from 'pg';
-import { generateSecretKeyHash, generateCode, generateVerificationURL } from "../../lib/generateCodes.js";
-import { sendVerificationEmail } from "../../lib/sendVerificationEmail.js";
+import { generateSecretKeyHash, generateCode, decryptCode } from "../../lib/generateCodes.js";
 
 const pool = new Pool({
   user: import.meta.env.DB_USER,
@@ -14,33 +13,8 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-const verification_secret = generateSecretKeyHash(import.meta.env.VERIFICATION_SECRET);
 const email_secret = generateSecretKeyHash(import.meta.env.EMAIL_SECRET);
 const password_secret = generateSecretKeyHash(import.meta.env.PASSWORD_SECRET);
-const timestamp_secret = generateSecretKeyHash(import.meta.env.TIMESTAMP_SECRET);
-const attempt_timestamp_secret = generateSecretKeyHash(import.meta.env.ATTEMPT_TIMESTAMP_SECRET);
-
-const emailPool = [];
-let currentEmailIndex = 0;
-
-let i = 1;
-while (true) {
-  const address = import.meta.env[`MAIL_ADDRESS_${i}`];
-  const password = import.meta.env[`MAIL_PASSWORD_${i}`];
-  const host = import.meta.env[`MAIL_HOST_${i}`];
-  const port = import.meta.env[`MAIL_PORT_${i}`];
-
-  if (!address || !password || !host || !port) break;
-  
-  emailPool.push({
-    address,
-    password,
-    host,
-    port: port,
-    index: i
-  });
-  i++;
-}
 
 export async function POST({ request }) {
   const origin = request.headers.get('origin');
@@ -105,43 +79,33 @@ export async function POST({ request }) {
       });
     }
 
-    let current_time;
-    let current_time_string;
-
     const client = await pool.connect();
     try {
-      const profileQuery = `
-        SELECT EXISTS(
-          SELECT 1 FROM profiles 
-          WHERE LOWER(email) = LOWER($1)
-        ) as email_exists
-      `;
+      const profileQuery = 'SELECT email, encrypted_password FROM profiles WHERE email = $1';
       const profileResult = await client.query(profileQuery, [email]);
-      
-      if (profileResult.rows[0]?.email_exists) {
+
+      if (profileResult.rows.length === 0) {
         return new Response(JSON.stringify({
-          error: 'Email already registered',
-          message: 'User with the same email has already registered. Please log in.'
+          error: 'Authentication failed',
+          message: 'No account found with this email address.'
         }), {
-          status: 409,
+          status: 401,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      current_time = Math.floor(Date.now() / 1000);
-      current_time_string = String(current_time);
+      const profile = profileResult.rows[0];
 
-      const { success } = await sendVerificationEmail(
-        emailPool, 
-        verification_secret,
-        product_name, 
-        email, 
-        password,
-        current_time_string, 
-      );
+      const correctPassword = decryptCode(profile.encrypted_password, password_secret);
 
-      if (!success) {
-        throw new Error('Failed to send verification email');
+      if (password != correctPassword) {
+        return new Response(JSON.stringify({
+          error: 'Authentication failed',
+          message: 'Incorrect password. Please try again.'
+        }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
     } finally {
@@ -149,16 +113,8 @@ export async function POST({ request }) {
     }
 
     return new Response(JSON.stringify({ 
-      verificationURL: generateVerificationURL(
-        email_secret, 
-        email, 
-        password_secret, 
-        password, 
-        timestamp_secret, 
-        current_time_string, 
-        attempt_timestamp_secret, 
-        String(current_time - 10)
-      )
+      message: 'Login successful! Redirecting to dashboard...',
+      emailCode: `${email}:${generateCode(email_secret, email)}`
     }), {
       status: 200,
       headers: { 

@@ -1,6 +1,7 @@
 export const prerender = false;
 import { Pool } from 'pg';
-import { generateSecretKeyHash, generateCode, decryptCode, verifyCode } from "../../lib/generateCodes.js";
+import { generateSecretKeyHash, generateCode, generateVerificationURL } from "../../lib/generateCodes.js";
+import { sendVerificationEmail } from "../../lib/sendVerificationEmail.js";
 
 const pool = new Pool({
   user: import.meta.env.DB_USER,
@@ -13,8 +14,34 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+const product_name = import.meta.env.PRODUCT_NAME;
+const verification_secret = generateSecretKeyHash(import.meta.env.VERIFICATION_SECRET);
 const email_secret = generateSecretKeyHash(import.meta.env.EMAIL_SECRET);
-const dodopayment_api_key = import.meta.env.DODOPAYMENT_API_KEY;
+const password_secret = generateSecretKeyHash(import.meta.env.PASSWORD_SECRET);
+const timestamp_secret = generateSecretKeyHash(import.meta.env.TIMESTAMP_SECRET);
+const attempt_timestamp_secret = generateSecretKeyHash(import.meta.env.ATTEMPT_TIMESTAMP_SECRET);
+
+const emailPool = [];
+let currentEmailIndex = 0;
+
+let i = 1;
+while (true) {
+  const address = import.meta.env[`MAIL_ADDRESS_${i}`];
+  const password = import.meta.env[`MAIL_PASSWORD_${i}`];
+  const host = import.meta.env[`MAIL_HOST_${i}`];
+  const port = import.meta.env[`MAIL_PORT_${i}`];
+
+  if (!address || !password || !host || !port) break;
+  
+  emailPool.push({
+    address,
+    password,
+    host,
+    port: port,
+    index: i
+  });
+  i++;
+}
 
 export async function POST({ request }) {
   const origin = request.headers.get('origin');
@@ -66,73 +93,59 @@ export async function POST({ request }) {
       });
     }
 
-    const emailCode = requestBody.emailCode;
-    const subscriptionId = requestBody.subscriptionId;
+    const email = requestBody.email;
+    const password = requestBody.password;
 
-    if (!emailCode || !verifyCode(email_secret, emailCode)) {
+    if (!email || !password) {
       return new Response(JSON.stringify({ 
-        error: 'Invalid email code',
-        message: 'Invalid email code. Redirecting to login page...',
-        redirect: '/login'
+        error: 'Missing required fields',
+        message: 'Both email and password are required'
       }), {
-        status: 403,
+        status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const email = emailCode.slice(0, emailCode.indexOf(':'));
-
-    let payment;
-    let product_type;
-
-    try {
-      const apiUrl = `https://test.dodopayments.com/subscriptions/${subscriptionId}`;
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${dodopayment_api_key}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch payment data: ${response.statusText}`);
-      }
-
-      payment = await response.json();
-    } catch (error) {
-      return new Response(JSON.stringify({
-        error: 'Payment verification failed',
-        message: 'Could not verify payment status'
-      }), {
-        status: 502,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    let current_time;
+    let current_time_string;
 
     const client = await pool.connect();
     try {
-      let updatequery;
-      let updatevalues;
+      const profileQuery = 'SELECT email FROM profiles WHERE email = $1';
+      const profileResult = await client.query(profileQuery, [email]);
 
-      if (payment && payment.status === 'active') {
-        if (payment.product_id == 'pdt_IwvOy1RQ0NzKldpDy0n6u') {
-          updatequery = 'update profiles set is_pro = true, is_business = false, subscription_id = $2 where email = $1';
-          product_type = 'pro';
-        }
-        if (payment.product_id == 'pdt_7NR5zqHCZtltX7k21VGP5') {
-          updatequery = 'update profiles set is_pro = false, is_business = true, subscription_id = $2 where email = $1';
-          product_type = 'business';
-        }
+      if (profileResult.rows.length === 0) {
+        return new Response(JSON.stringify({
+          error: 'Authentication failed',
+          message: 'No account found with this email address.'
+        }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
-      await client.query(updatequery, [email, subscriptionId]);
+      current_time = Math.floor(Date.now() / 1000);
+      current_time_string = String(current_time);
+
+      const { success } = await sendVerificationEmail(
+        emailPool, 
+        verification_secret,
+        product_name, 
+        email, 
+        password,
+        current_time_string, 
+      );
+
+      if (!success) {
+        throw new Error('Failed to send verification email');
+      }
+
     } finally {
       client.release();
     }
-    
+
     return new Response(JSON.stringify({ 
-      message: 'Profile data updated successfully',
-      product_type: product_type || '',
+      verificationURL: generateVerificationURL(email_secret, email, password_secret, password, timestamp_secret, current_time_string, attempt_timestamp_secret, String(current_time - 10))
     }), {
       status: 200,
       headers: { 

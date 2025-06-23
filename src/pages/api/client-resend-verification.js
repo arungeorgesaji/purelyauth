@@ -1,19 +1,8 @@
 export const prerender = false;
-import { Pool } from 'pg';
-import { generateSecretKeyHash, generateCode, generateVerificationURL } from "../../lib/generateCodes.js";
+import { generateSecretKeyHash, generateCode, generateVerificationURL, decryptCode, decryptVerificationURL } from "../../lib/generateCodes.js";
 import { sendVerificationEmail } from "../../lib/sendVerificationEmail.js";
 
-const pool = new Pool({
-  user: import.meta.env.DB_USER,
-  host: 'localhost', 
-  database: import.meta.env.DB_NAME,
-  password: import.meta.env.DB_PASSWORD,
-  port: 5432,
-  max: 100, 
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
+const product_name = import.meta.env.PRODUCT_NAME;
 const verification_secret = generateSecretKeyHash(import.meta.env.VERIFICATION_SECRET);
 const email_secret = generateSecretKeyHash(import.meta.env.EMAIL_SECRET);
 const password_secret = generateSecretKeyHash(import.meta.env.PASSWORD_SECRET);
@@ -53,7 +42,7 @@ export async function POST({ request }) {
 
   const apiRootDomain = getRootDomain(requestUrl.hostname);
   const originRootDomain = origin ? getRootDomain(new URL(origin).hostname) : null;
-    
+
   if (origin && originRootDomain !== apiRootDomain) {
     return new Response(JSON.stringify({ 
       error: 'forbidden',
@@ -91,74 +80,68 @@ export async function POST({ request }) {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    
+    const url = requestBody.url;
 
-    const email = requestBody.email;
-    const password = requestBody.password;
-
-    if (!email || !password) {
+    if (!url) {
       return new Response(JSON.stringify({ 
-        error: 'Missing required fields',
-        message: 'Both email and password are required'
+        error: 'Missing URL',
+        message: 'A valid URL is required to proceed with verification'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    let current_time;
-    let current_time_string;
+    const userData = decryptVerificationURL(url, email_secret, password_secret, timestamp_secret, attempt_timestamp_secret)
 
-    const client = await pool.connect();
-    try {
-      const profileQuery = `
-        SELECT EXISTS(
-          SELECT 1 FROM profiles 
-          WHERE LOWER(email) = LOWER($1)
-        ) as email_exists
-      `;
-      const profileResult = await client.query(profileQuery, [email]);
-      
-      if (profileResult.rows[0]?.email_exists) {
-        return new Response(JSON.stringify({
-          error: 'Email already registered',
-          message: 'User with the same email has already registered. Please log in.'
-        }), {
-          status: 409,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+    const email = userData.email;
+    const password = userData.password;
+    const timestamp = userData.timestamp;
 
-      current_time = Math.floor(Date.now() / 1000);
-      current_time_string = String(current_time);
+    if (!userData) {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid Verification URL',
+        message: 'The current verification URL is invalid'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const current_time = Math.floor(Date.now() / 1000);
+    const current_time_string = String(current_time); 
 
-      const { success } = await sendVerificationEmail(
-        emailPool, 
-        verification_secret,
-        product_name, 
-        email, 
-        password,
-        current_time_string, 
-      );
+    const timePassed = current_time - timestamp;
+    const waitTime = 60; 
+    const timeLeft = Math.ceil(waitTime - timePassed);
+    
+    if (timePassed < waitTime) {
+      return new Response(JSON.stringify({ 
+        error: 'Verification URL is new',
+        message: `Please wait ${timeLeft} more second${timeLeft !== 1 ? 's' : ''} before requesting a new verification email`
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-      if (!success) {
-        throw new Error('Failed to send verification email');
-      }
+    const { success } = await sendVerificationEmail(
+      emailPool, 
+      verification_secret,
+      product_name, 
+      email,
+      password,
+      current_time_string 
+    );
 
-    } finally {
-      client.release();
+    if (!success) {
+      throw new Error('Failed to send verification email');
     }
 
     return new Response(JSON.stringify({ 
-      verificationURL: generateVerificationURL(
-        email_secret, 
-        email, 
-        password_secret, 
-        password, 
-        timestamp_secret, 
-        current_time_string, 
-        attempt_timestamp_secret, 
-        String(current_time - 10)
-      )
+      message: 'Verification code resent. Please check your email.',
+      verificationURL: generateVerificationURL(email_secret, email, password_secret, password, timestamp_secret, current_time_string, attempt_timestamp_secret, String(current_time - 10)),
     }), {
       status: 200,
       headers: { 
@@ -194,7 +177,7 @@ export async function OPTIONS({ request }) {
 
   const apiRootDomain = getRootDomain(requestUrl.hostname);
   const originRootDomain = origin ? getRootDomain(new URL(origin).hostname) : null;
-
+ 
   const isAllowedOrigin = originRootDomain === apiRootDomain;
   
   return new Response(null, {
